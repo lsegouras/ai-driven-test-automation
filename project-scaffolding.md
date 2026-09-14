@@ -62,9 +62,17 @@ UI mode needs a longer timeout than the 5s ceiling, and that is not a double sta
   tests that sit at a 2.4s median there reach 4.3s, so a 5s cap fails four of the five while
   the quickest one survives. The cap exists to stop a real run — CLI or CI — from hanging;
   under a debugger it only gets in the way, and nothing about what the tests assert changes.
-  Playwright does the same natively for --debug, which zeroes the timeout via PWDEBUG. The
-  config detects --ui in process.argv and relaxes the timeout only there. Verified that the
-  5s cap still bites in normal runs: a deliberately 6s test is cut at exactly 5000ms.
+  Playwright does the same natively for --debug, which zeroes the timeout via PWDEBUG.
+  Detecting the mode has one trap worth knowing: every worker re-loads this config in its own
+  process, and those processes get a bare argv — no --ui, no --trace, nothing from the command
+  line. Reading process.argv alone therefore works in the main process and silently fails in
+  every worker, which is exactly where the test timeout is applied. Setting a process.env flag
+  in the main process fixes it, because the workers are spawned afterwards and inherit the
+  environment. Verified both ends: the workers report the relaxed timeout under --ui, and a
+  deliberately 6s test is still cut at exactly 5000ms in a normal run.
+  Note that --ui-port and --ui-host also start UI mode, so the check covers the whole --ui*
+  family, and that UI mode reads the config once at startup: after editing playwright.config.js
+  you have to restart it, not just press Reload.
 
 The form resets ~150ms before the card it submitted reaches the DOM
   view.js calls form.reset() synchronously, but the controller awaits service.saveItem()

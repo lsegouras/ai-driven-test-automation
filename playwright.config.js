@@ -1,6 +1,15 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
 
+// Cada worker recarrega este arquivo num processo próprio, e o argv desses
+// processos não traz as flags da linha de comando — só o do processo principal
+// traz. Detectar o UI mode lendo process.argv aqui funcionaria no principal e
+// falharia silenciosamente em todo worker, que é justamente onde o timeout do
+// teste é aplicado. Marcar em process.env resolve: o principal avalia este
+// arquivo antes de criar os workers, e eles herdam o ambiente.
+if (process.argv.some((a) => a === '--ui' || a.startsWith('--ui-'))) process.env.PW_UI_MODE = '1';
+const EM_UI_MODE = process.env.PW_UI_MODE === '1';
+
 module.exports = defineConfig({
   testDir: './tests',
 
@@ -15,7 +24,7 @@ module.exports = defineConfig({
   // verdade — CLI ou CI — fique pendurada; sob um depurador ele só atrapalha, e o
   // que os testes verificam não muda. O próprio Playwright faz isso com --debug,
   // que zera o timeout via PWDEBUG.
-  timeout: process.argv.includes('--ui') ? 30_000 : 5_000,
+  timeout: EM_UI_MODE ? 30_000 : 5_000,
   expect: { timeout: 3_000 },
 
   fullyParallel: true,
