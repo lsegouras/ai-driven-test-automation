@@ -85,4 +85,36 @@ Each test starts with exactly 3 cards
   The app persists submitted items to localStorage ('tdd-ew-db') and appends them to the three
   hardcoded cards. Playwright gives every test a fresh context, so counts stay deterministic.
 
-Useful selectors: #title, #imageUrl, #btnSubmit, #card-list, #titleFeedback, #urlFeedback
+Page audit (measured against the live site, not read off the markup)
+
+  Routing. baseURL is the subpath, page.goto('./') lands on it, and all 10 requests the page
+  makes stay under /vanilla-js-web-app-example/ with zero failures. A bare '/' would resolve
+  to https://erickwendel.github.io/ and hit the Pages 404.
+
+  Requests the page makes: the document, lib/boostrap.min.css, lib/bootstrap.bundle.min.js,
+  the three img/*.jpeg, and src/{index,view,service,controller}.js. The declared favicon
+  img/icon.webp is not fetched headless but is in the cache list for headed and UI runs.
+
+  Form: one <form class="needs-validation" novalidate> with 3 elements.
+    #title       input[type=text], required, placeholder "Image Title"
+    #imageUrl    input[type=url],  required, placeholder "https://img.com/erick.png"
+    #btnSubmit   input[type=submit], aria-label "Submit Form"
+    #titleFeedback  "Please type a title for the image."
+    #urlFeedback    "Please type a valid URL"
+  None of the inputs carry a name attribute — access is by id.
+
+  Seeded cards: #card-list > article, each figure > img + h4. Titles "AI Alien",
+  "Predator Night Vision", "ET Bilu"; srcs relative (./img/*.jpeg); alt "Image of an <title>".
+
+  The app ships a duplicate id: inputGroupPrepend appears twice, on both input-group spans.
+  It is invalid HTML and #inputGroupPrepend silently matches only the first — do not select on
+  it. Prefer the ids above, or roles.
+
+  Document title "TDD Frontend Example", lang "en", localStorage key "tdd-ew-db".
+
+Anchor the asset routes to the app, not to a bare path pattern
+  A loose /\/(img|lib)\// matches any host. A future test pulling, say,
+  https://some-cdn.com/lib/bootstrap.bundle.min.js would match on filename and be served the
+  local cache copy instead of the real file, with nothing to indicate it. The route is anchored
+  to BASE for that reason. Verified: the five app assets are intercepted, and a fetch to another
+  host under /lib/ goes out to the network rather than being answered from disk.

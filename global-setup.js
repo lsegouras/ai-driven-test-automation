@@ -74,5 +74,6 @@ module.exports = async () => {
   );
 };
 
+module.exports.BASE = BASE;
 module.exports.CACHE_DIR = CACHE_DIR;
 module.exports.ASSETS = ASSETS;

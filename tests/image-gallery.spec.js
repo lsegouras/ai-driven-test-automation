@@ -1,7 +1,7 @@
 // @ts-check
 const path = require('path');
 const { test, expect } = require('@playwright/test');
-const { CACHE_DIR, ASSETS } = require('../global-setup');
+const { CACHE_DIR, ASSETS, BASE } = require('../global-setup');
 
 /** caminho relativo -> content-type, para servir os assets cacheados. */
 const TIPO_POR_ASSET = new Map(ASSETS);
@@ -33,7 +33,11 @@ test.beforeEach(async ({ page }) => {
   // Imagens e Bootstrap saem do cache em disco (ver global-setup.js), não da rede:
   // são ~1,25 MB que todo teste rebaixava. Renderizam exatamente igual, já que são
   // os mesmos bytes. O HTML e os módulos em /src seguem vindo do site publicado.
-  await page.route(/\/(img|lib)\//, (route) => {
+  // Ancorado no endereço do app de propósito. Um padrão solto como /\/(img|lib)\//
+  // pegaria QUALQUER host — um https://outro-cdn.com/lib/bootstrap.bundle.min.js
+  // casaria pelo nome do arquivo e seria servido do disco no lugar do CDN real,
+  // sem aviso nenhum.
+  await page.route(`${BASE}/{img,lib}/**`, (route) => {
     const { pathname } = new URL(route.request().url());
     const rel = [...TIPO_POR_ASSET.keys()].find((k) => pathname.endsWith(`/${k}`));
     if (!rel) return route.continue();
