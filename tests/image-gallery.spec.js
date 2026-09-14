@@ -1,16 +1,6 @@
 // @ts-check
-const path = require('path');
 const { test, expect } = require('@playwright/test');
-const { CACHE_DIR, ASSETS, BASE } = require('../global-setup');
-
-/** caminho relativo -> content-type, para servir os assets cacheados. */
-const TIPO_POR_ASSET = new Map(ASSETS);
-
-/**
- * Cards renderizados na galeria.
- * @param {import('@playwright/test').Page} page
- */
-const cards = (page) => page.locator('#card-list article');
+const { serveCachedAssets } = require('./support/cached-assets');
 
 /**
  * Roda dentro do browser: verdadeiro quando toda <img> do conjunto foi decodificada.
@@ -30,83 +20,26 @@ const expectImagesRendered = async (scope) => {
 };
 
 test.beforeEach(async ({ page }) => {
-  // Imagens e Bootstrap saem do cache em disco (ver global-setup.js), não da rede:
-  // são ~1,25 MB que todo teste rebaixava. Renderizam exatamente igual, já que são
-  // os mesmos bytes. O HTML e os módulos em /src seguem vindo do site publicado.
-  // Ancorado no endereço do app de propósito. Um padrão solto como /\/(img|lib)\//
-  // pegaria QUALQUER host — um https://outro-cdn.com/lib/bootstrap.bundle.min.js
-  // casaria pelo nome do arquivo e seria servido do disco no lugar do CDN real,
-  // sem aviso nenhum.
-  await page.route(`${BASE}/{img,lib}/**`, (route) => {
-    const { pathname } = new URL(route.request().url());
-    const rel = [...TIPO_POR_ASSET.keys()].find((k) => pathname.endsWith(`/${k}`));
-    if (!rel) return route.continue();
-    return route.fulfill({ path: path.join(CACHE_DIR, rel), contentType: TIPO_POR_ASSET.get(rel) });
-  });
-
-  // A URL usada nos testes de criação de card é fictícia e não resolveria. Servindo
-  // uma imagem real, o card novo também renderiza — e o atributo src continua sendo
-  // exatamente o que o teste afirma.
-  await page.route('https://img.com/**', (route) =>
-    route.fulfill({ path: path.join(CACHE_DIR, 'img/et-bilu.jpeg'), contentType: 'image/jpeg' }));
-
+  await serveCachedAssets(page);
   await page.goto('./', { waitUntil: 'domcontentloaded' });
 });
 
 test.describe('Galeria de imagens', () => {
-  test('carrega a página com os cards iniciais', async ({ page }) => {
+  // Envio e validação do formulário são cobertos por form-submission.spec.ts e
+  // form-validation.spec.ts. Sobra aqui o que eles não cobrem: o estado inicial da
+  // página e a prova de que as imagens realmente renderizam.
+  //
+  // Este é o único teste que afirma um número absoluto de cards, e de propósito:
+  // o que ele verifica É o conteúdo seed. Cada teste recebe um contexto limpo, com
+  // localStorage vazio, então os três são determinísticos.
+  test('carrega a página com os cards seed e as imagens renderizadas', async ({ page }) => {
     await expect(page).toHaveTitle('TDD Frontend Example');
-    await expect(cards(page)).toHaveCount(3);
-    await expect(page.getByRole('heading', { name: 'AI Alien' })).toBeVisible();
+    await expect(page.getByRole('article')).toHaveCount(3);
+
+    for (const titulo of ['AI Alien', 'Predator Night Vision', 'ET Bilu']) {
+      await expect(page.getByRole('heading', { name: titulo })).toBeVisible();
+    }
+
     await expectImagesRendered(page.locator('#card-list'));
-  });
-
-  test('adiciona um card ao enviar o formulário preenchido', async ({ page }) => {
-    const title = 'Alien Xenomorph';
-    const imageUrl = 'https://img.com/xenomorph.png';
-
-    await page.locator('#title').fill(title);
-    await page.locator('#imageUrl').fill(imageUrl);
-    await page.getByRole('button', { name: 'Submit Form' }).click();
-
-    await expect(cards(page)).toHaveCount(4);
-
-    const novoCard = cards(page).last();
-    await expect(novoCard.getByRole('heading', { name: title })).toBeVisible();
-    await expect(novoCard.locator('img')).toHaveAttribute('src', imageUrl);
-    await expectImagesRendered(novoCard);
-  });
-
-  test('limpa o formulário depois de um envio válido', async ({ page }) => {
-    await page.locator('#title').fill('ET Bilu 2');
-    await page.locator('#imageUrl').fill('https://img.com/bilu2.png');
-    await page.getByRole('button', { name: 'Submit Form' }).click();
-
-    await expect(page.locator('#title')).toHaveValue('');
-    await expect(page.locator('#imageUrl')).toHaveValue('');
-
-    // O form.reset() do app é síncrono, mas salvar e renderizar o card não é: o
-    // card só entra no DOM ~150ms depois. Sem esperar por ele, o teste termina no
-    // meio do trabalho do app e o snapshot do relatório congela a imagem ainda
-    // carregando. Esperar aqui também torna o "envio válido" do título verdadeiro.
-    await expect(cards(page)).toHaveCount(4);
-    await expectImagesRendered(cards(page).last());
-  });
-
-  test('não adiciona card quando o formulário está vazio', async ({ page }) => {
-    await page.getByRole('button', { name: 'Submit Form' }).click();
-
-    await expect(page.locator('#titleFeedback')).toBeVisible();
-    await expect(page.locator('#titleFeedback')).toHaveText(/Please type a title/);
-    await expect(cards(page)).toHaveCount(3);
-  });
-
-  test('não adiciona card quando a URL é inválida', async ({ page }) => {
-    await page.locator('#title').fill('URL quebrada');
-    await page.locator('#imageUrl').fill('nao-e-uma-url');
-    await page.getByRole('button', { name: 'Submit Form' }).click();
-
-    await expect(page.locator('#urlFeedback')).toBeVisible();
-    await expect(cards(page)).toHaveCount(3);
   });
 });
