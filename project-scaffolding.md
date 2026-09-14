@@ -54,6 +54,13 @@ Treat the 5s limit as a ceiling, not a target — the network is the whole budge
   state, 3.9s on a cold cache (CI is always cold, so expect the latter).
   A single green run does not demonstrate stability here — repeat the suite before believing it.
 
+The form resets ~150ms before the card it submitted reaches the DOM
+  view.js calls form.reset() synchronously, but the controller awaits service.saveItem()
+  before calling updateList(), so a test that only asserts the cleared inputs finishes while
+  the app is still working. The card lands afterwards, and the report's final snapshot freezes
+  it mid-render with the image still loading — which reads as a broken image in UI mode. Any
+  test that submits the form should wait for the card it created, not just for the reset.
+
 Each test starts with exactly 3 cards
   The app persists submitted items to localStorage ('tdd-ew-db') and appends them to the three
   hardcoded cards. Playwright gives every test a fresh context, so counts stay deterministic.

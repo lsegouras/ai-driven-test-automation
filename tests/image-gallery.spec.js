@@ -70,6 +70,13 @@ test.describe('Galeria de imagens', () => {
 
     await expect(page.locator('#title')).toHaveValue('');
     await expect(page.locator('#imageUrl')).toHaveValue('');
+
+    // O form.reset() do app é síncrono, mas salvar e renderizar o card não é: o
+    // card só entra no DOM ~150ms depois. Sem esperar por ele, o teste termina no
+    // meio do trabalho do app e o snapshot do relatório congela a imagem ainda
+    // carregando. Esperar aqui também torna o "envio válido" do título verdadeiro.
+    await expect(cards(page)).toHaveCount(4);
+    await expectImagesRendered(cards(page).last());
   });
 
   test('não adiciona card quando o formulário está vazio', async ({ page }) => {
