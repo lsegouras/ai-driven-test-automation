@@ -1,15 +1,41 @@
 // @ts-check
+const path = require('path');
 const { test, expect } = require('@playwright/test');
+const { CACHE_DIR } = require('../global-setup');
 
 /** Cards renderizados na galeria. */
 const cards = (page) => page.locator('#card-list article');
 
+/**
+ * Falha se alguma <img> do escopo não tiver sido decodificada pelo browser.
+ * naturalWidth só é maior que zero quando os bytes chegaram e foram lidos como
+ * imagem — um <img> quebrado tem src preenchido e naturalWidth igual a zero.
+ */
+const expectImagesRendered = async (scope) => {
+  await expect
+    .poll(() =>
+      scope
+        .locator('img')
+        .evaluateAll((imgs) => imgs.length > 0 && imgs.every((i) => i.complete && i.naturalWidth > 0)),
+    )
+    .toBe(true);
+};
+
 test.beforeEach(async ({ page }) => {
-  // Nenhuma asserção olha o pixel das imagens — só o atributo src. Abortá-las corta o
-  // grosso da rede e mantém cada teste com folga dentro do orçamento de 5s, inclusive
-  // com os workers em paralelo. CSS e JS seguem carregando: a validação do Bootstrap
-  // depende deles.
-  await page.route('**/*.{png,jpg,jpeg,webp,gif}', (route) => route.abort());
+  // As imagens vêm do cache em disco (ver global-setup.js), não da rede. Elas
+  // renderizam normalmente — só não custam os ~940 KB por teste que estouravam o
+  // orçamento de 5s com os workers em paralelo.
+  await page.route('**/img/*.jpeg', (route) => {
+    const name = path.basename(new URL(route.request().url()).pathname);
+    return route.fulfill({ path: path.join(CACHE_DIR, name), contentType: 'image/jpeg' });
+  });
+
+  // A URL usada no teste de criação de card é fictícia e não resolveria. Servindo
+  // uma imagem real, o card novo também renderiza — e o atributo src continua sendo
+  // exatamente o que o teste afirma.
+  await page.route('https://img.com/**', (route) =>
+    route.fulfill({ path: path.join(CACHE_DIR, 'et-bilu.jpeg'), contentType: 'image/jpeg' }));
+
   await page.goto('./', { waitUntil: 'domcontentloaded' });
 });
 
@@ -18,6 +44,7 @@ test.describe('Galeria de imagens', () => {
     await expect(page).toHaveTitle('TDD Frontend Example');
     await expect(cards(page)).toHaveCount(3);
     await expect(page.getByRole('heading', { name: 'AI Alien' })).toBeVisible();
+    await expectImagesRendered(page.locator('#card-list'));
   });
 
   test('adiciona um card ao enviar o formulário preenchido', async ({ page }) => {
@@ -33,6 +60,7 @@ test.describe('Galeria de imagens', () => {
     const novoCard = cards(page).last();
     await expect(novoCard.getByRole('heading', { name: title })).toBeVisible();
     await expect(novoCard.locator('img')).toHaveAttribute('src', imageUrl);
+    await expectImagesRendered(novoCard);
   });
 
   test('limpa o formulário depois de um envio válido', async ({ page }) => {

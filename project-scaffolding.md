@@ -41,10 +41,17 @@ Treat the 5s limit as a ceiling, not a target — the network is the whole budge
   Two changes fixed it, and both are in the spec:
     - navigate with waitUntil: 'domcontentloaded' ('load' waits on images for nothing, since the
       seeded cards are static HTML and Playwright assertions auto-retry)
-    - abort image requests via page.route — no assertion inspects a rendered image, only the src
-      attribute, which is set regardless. CSS and JS must keep loading: Bootstrap drives the
-      validation styles the tests assert on.
-  After both: 25/25 test executions green over 5 consecutive runs, slowest single test 2.6s.
+    - serve the gallery images from a local cache instead of the network. global-setup.js
+      downloads the three of them once per run into .image-cache/ (gitignored) and the spec
+      fulfills the routes from disk. They weigh ~940 KB together, 838 KB of it predator.jpeg,
+      and every test was refetching all of them. The app's own HTML, CSS and JS still come
+      from the live site, so the deployed app is still what is under test — 87 KB per test.
+  The images render for real, and the suite asserts it: expectImagesRendered checks
+  naturalWidth > 0 on every <img>, which only holds once the browser has decoded the bytes.
+  A broken image has a src and a naturalWidth of 0, so the assertion catches it — verified by
+  temporarily aborting the routes and watching the test fail.
+  After both: 30/30 test executions green over 6 consecutive runs. Slowest test 2.8s in steady
+  state, 3.9s on a cold cache (CI is always cold, so expect the latter).
   A single green run does not demonstrate stability here — repeat the suite before believing it.
 
 Each test starts with exactly 3 cards
