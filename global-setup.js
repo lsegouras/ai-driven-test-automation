@@ -13,6 +13,7 @@ const BASE = 'https://erickwendel.github.io/vanilla-js-web-app-example';
  *
  * O nome do CSS tem um typo — "boostrap" — que é do próprio app, não daqui.
  */
+/** @type {[string, string][]} caminho relativo -> content-type */
 const ASSETS = [
   ['img/ai-alien.jpeg', 'image/jpeg'],
   ['img/predator.jpeg', 'image/jpeg'],
@@ -24,14 +25,24 @@ const ASSETS = [
 
 const CACHE_DIR = path.join(__dirname, '.asset-cache');
 
-/** Baixa uma URL para o disco, seguindo redirect. */
+/**
+ * Baixa uma URL para o disco, seguindo redirect.
+ * @param {string} url
+ * @param {string} dest
+ * @returns {Promise<void>}
+ */
 function download(url, dest) {
   return new Promise((resolve, reject) => {
     https
       .get(url, (res) => {
         if (res.statusCode === 301 || res.statusCode === 302) {
           res.resume();
-          return download(res.headers.location, dest).then(resolve, reject);
+          const destino = res.headers.location;
+          // Um 3xx sem Location não tem para onde seguir. Sem esta guarda o
+          // undefined descia para o https.get seguinte e virava um erro opaco,
+          // longe da causa.
+          if (!destino) return reject(new Error(`${url} redirecionou sem Location`));
+          return download(destino, dest).then(resolve, reject);
         }
         if (res.statusCode !== 200) {
           res.resume();

@@ -6,22 +6,27 @@ const { CACHE_DIR, ASSETS } = require('../global-setup');
 /** caminho relativo -> content-type, para servir os assets cacheados. */
 const TIPO_POR_ASSET = new Map(ASSETS);
 
-/** Cards renderizados na galeria. */
+/**
+ * Cards renderizados na galeria.
+ * @param {import('@playwright/test').Page} page
+ */
 const cards = (page) => page.locator('#card-list article');
+
+/**
+ * Roda dentro do browser: verdadeiro quando toda <img> do conjunto foi decodificada.
+ * @param {HTMLImageElement[]} imgs
+ */
+const todasDecodificadas = (imgs) =>
+  imgs.length > 0 && imgs.every((i) => i.complete && i.naturalWidth > 0);
 
 /**
  * Falha se alguma <img> do escopo não tiver sido decodificada pelo browser.
  * naturalWidth só é maior que zero quando os bytes chegaram e foram lidos como
  * imagem — um <img> quebrado tem src preenchido e naturalWidth igual a zero.
+ * @param {import('@playwright/test').Locator} scope
  */
 const expectImagesRendered = async (scope) => {
-  await expect
-    .poll(() =>
-      scope
-        .locator('img')
-        .evaluateAll((imgs) => imgs.length > 0 && imgs.every((i) => i.complete && i.naturalWidth > 0)),
-    )
-    .toBe(true);
+  await expect.poll(() => scope.locator('img').evaluateAll(todasDecodificadas)).toBe(true);
 };
 
 test.beforeEach(async ({ page }) => {
