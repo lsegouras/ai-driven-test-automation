@@ -5,6 +5,11 @@ const { test, expect } = require('@playwright/test');
 const cards = (page) => page.locator('#card-list article');
 
 test.beforeEach(async ({ page }) => {
+  // Nenhuma asserção olha o pixel das imagens — só o atributo src. Abortá-las corta o
+  // grosso da rede e mantém cada teste com folga dentro do orçamento de 5s, inclusive
+  // com os workers em paralelo. CSS e JS seguem carregando: a validação do Bootstrap
+  // depende deles.
+  await page.route('**/*.{png,jpg,jpeg,webp,gif}', (route) => route.abort());
   await page.goto('./', { waitUntil: 'domcontentloaded' });
 });
 

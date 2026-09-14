@@ -33,10 +33,19 @@ The app is served from a subpath, so navigate with './' and not '/'
   resolves against the origin only, landing on https://erickwendel.github.io/ — the GitHub
   Pages 404. Use page.goto('./'), which resolves relative to the baseURL path.
 
-Navigate with waitUntil: 'domcontentloaded' to stay under the 5s budget
-  The default 'load' waits for the three seeded images and pushed the slowest test to 4.9s
-  against the 5s limit. The seeded cards are static HTML and Playwright assertions auto-retry,
-  so waiting for 'load' buys nothing. With 'domcontentloaded' the slowest test drops to ~3.3s.
+Treat the 5s limit as a ceiling, not a target — the network is the whole budget
+  Every test loads the page plus three seeded images over the public internet, and the suite
+  runs four workers in parallel. Setting the per-test timeout at exactly 5s left no headroom:
+  runs went green once and then failed three tests on a later run, with GitHub Pages throttling
+  the concurrent requests (suite totals drifted 13.9s -> 17.2s -> 20.2s across back-to-back runs).
+  Two changes fixed it, and both are in the spec:
+    - navigate with waitUntil: 'domcontentloaded' ('load' waits on images for nothing, since the
+      seeded cards are static HTML and Playwright assertions auto-retry)
+    - abort image requests via page.route — no assertion inspects a rendered image, only the src
+      attribute, which is set regardless. CSS and JS must keep loading: Bootstrap drives the
+      validation styles the tests assert on.
+  After both: 25/25 test executions green over 5 consecutive runs, slowest single test 2.6s.
+  A single green run does not demonstrate stability here — repeat the suite before believing it.
 
 Each test starts with exactly 3 cards
   The app persists submitted items to localStorage ('tdd-ew-db') and appends them to the three
