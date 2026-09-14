@@ -3,10 +3,26 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 
-const BASE = 'https://erickwendel.github.io/vanilla-js-web-app-example/img';
-const IMAGES = ['ai-alien.jpeg', 'predator.jpeg', 'et-bilu.jpeg'];
+const BASE = 'https://erickwendel.github.io/vanilla-js-web-app-example';
 
-const CACHE_DIR = path.join(__dirname, '.image-cache');
+/**
+ * Assets estáticos e pesados que todo teste rebaixaria da rede. Só entram aqui
+ * coisas que não são o app em si: as imagens da galeria e o Bootstrap vendorizado.
+ * O HTML e os módulos em /src continuam vindo do site publicado, que é o que está
+ * de fato sob teste.
+ *
+ * O nome do CSS tem um typo — "boostrap" — que é do próprio app, não daqui.
+ */
+const ASSETS = [
+  ['img/ai-alien.jpeg', 'image/jpeg'],
+  ['img/predator.jpeg', 'image/jpeg'],
+  ['img/et-bilu.jpeg', 'image/jpeg'],
+  ['img/icon.webp', 'image/webp'],
+  ['lib/boostrap.min.css', 'text/css'],
+  ['lib/bootstrap.bundle.min.js', 'text/javascript'],
+];
+
+const CACHE_DIR = path.join(__dirname, '.asset-cache');
 
 /** Baixa uma URL para o disco, seguindo redirect. */
 function download(url, dest) {
@@ -31,22 +47,21 @@ function download(url, dest) {
 }
 
 /**
- * As três imagens da galeria somam ~940 KB, sendo 838 KB só a predator.jpeg.
- * Buscá-las da rede em cada teste era o que estourava o orçamento de 5s com os
- * workers em paralelo. Aqui elas são baixadas uma única vez por execução (e
- * reaproveitadas entre execuções locais); os testes as servem do disco.
+ * Baixa os assets uma única vez por execução (e reaproveita entre execuções
+ * locais). Juntos eles somam ~1,25 MB, e cada teste os rebaixava inteiros — era
+ * isso que estourava o orçamento de 5s, sobretudo no UI mode, onde a gravação de
+ * trace encarece cada ação.
  */
 module.exports = async () => {
-  fs.mkdirSync(CACHE_DIR, { recursive: true });
-
   await Promise.all(
-    IMAGES.map(async (name) => {
-      const dest = path.join(CACHE_DIR, name);
+    ASSETS.map(async ([rel]) => {
+      const dest = path.join(CACHE_DIR, rel);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
       if (fs.existsSync(dest) && fs.statSync(dest).size > 0) return;
-      await download(`${BASE}/${name}`, dest);
+      await download(`${BASE}/${rel}`, dest);
     }),
   );
 };
 
 module.exports.CACHE_DIR = CACHE_DIR;
-module.exports.IMAGES = IMAGES;
+module.exports.ASSETS = ASSETS;

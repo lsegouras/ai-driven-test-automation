@@ -50,9 +50,21 @@ Treat the 5s limit as a ceiling, not a target — the network is the whole budge
   naturalWidth > 0 on every <img>, which only holds once the browser has decoded the bytes.
   A broken image has a src and a naturalWidth of 0, so the assertion catches it — verified by
   temporarily aborting the routes and watching the test fail.
-  After both: 30/30 test executions green over 6 consecutive runs. Slowest test 2.8s in steady
-  state, 3.9s on a cold cache (CI is always cold, so expect the latter).
+  A third change came later, and it mattered more than either: cap workers at 2. Playwright
+  defaults to half the cores, which is 4 on this machine, and four Chromiums competing for CPU
+  and disk made every test SLOWER than two did — 2.0-2.9s against 1.5-2.0s, and 4.0-4.6s
+  against 1.2-2.4s once traces were being recorded. It also aligns local runs with CI, whose
+  4-core runner was already using two.
   A single green run does not demonstrate stability here — repeat the suite before believing it.
+
+UI mode needs a longer timeout than the 5s ceiling, and that is not a double standard
+  UI mode records a trace of every action and runs everything under inspection. The same
+  tests that sit at a 2.4s median there reach 4.3s, so a 5s cap fails four of the five while
+  the quickest one survives. The cap exists to stop a real run — CLI or CI — from hanging;
+  under a debugger it only gets in the way, and nothing about what the tests assert changes.
+  Playwright does the same natively for --debug, which zeroes the timeout via PWDEBUG. The
+  config detects --ui in process.argv and relaxes the timeout only there. Verified that the
+  5s cap still bites in normal runs: a deliberately 6s test is cut at exactly 5000ms.
 
 The form resets ~150ms before the card it submitted reaches the DOM
   view.js calls form.reset() synchronously, but the controller awaits service.saveItem()

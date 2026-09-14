@@ -1,7 +1,10 @@
 // @ts-check
 const path = require('path');
 const { test, expect } = require('@playwright/test');
-const { CACHE_DIR } = require('../global-setup');
+const { CACHE_DIR, ASSETS } = require('../global-setup');
+
+/** caminho relativo -> content-type, para servir os assets cacheados. */
+const TIPO_POR_ASSET = new Map(ASSETS);
 
 /** Cards renderizados na galeria. */
 const cards = (page) => page.locator('#card-list article');
@@ -22,19 +25,21 @@ const expectImagesRendered = async (scope) => {
 };
 
 test.beforeEach(async ({ page }) => {
-  // As imagens vêm do cache em disco (ver global-setup.js), não da rede. Elas
-  // renderizam normalmente — só não custam os ~940 KB por teste que estouravam o
-  // orçamento de 5s com os workers em paralelo.
-  await page.route('**/img/*.jpeg', (route) => {
-    const name = path.basename(new URL(route.request().url()).pathname);
-    return route.fulfill({ path: path.join(CACHE_DIR, name), contentType: 'image/jpeg' });
+  // Imagens e Bootstrap saem do cache em disco (ver global-setup.js), não da rede:
+  // são ~1,25 MB que todo teste rebaixava. Renderizam exatamente igual, já que são
+  // os mesmos bytes. O HTML e os módulos em /src seguem vindo do site publicado.
+  await page.route(/\/(img|lib)\//, (route) => {
+    const { pathname } = new URL(route.request().url());
+    const rel = [...TIPO_POR_ASSET.keys()].find((k) => pathname.endsWith(`/${k}`));
+    if (!rel) return route.continue();
+    return route.fulfill({ path: path.join(CACHE_DIR, rel), contentType: TIPO_POR_ASSET.get(rel) });
   });
 
-  // A URL usada no teste de criação de card é fictícia e não resolveria. Servindo
+  // A URL usada nos testes de criação de card é fictícia e não resolveria. Servindo
   // uma imagem real, o card novo também renderiza — e o atributo src continua sendo
   // exatamente o que o teste afirma.
   await page.route('https://img.com/**', (route) =>
-    route.fulfill({ path: path.join(CACHE_DIR, 'et-bilu.jpeg'), contentType: 'image/jpeg' }));
+    route.fulfill({ path: path.join(CACHE_DIR, 'img/et-bilu.jpeg'), contentType: 'image/jpeg' }));
 
   await page.goto('./', { waitUntil: 'domcontentloaded' });
 });
